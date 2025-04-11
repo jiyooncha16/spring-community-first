@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.zerock.mapper.MemberMapper">
+
+	<resultMap type="org.zerock.domain.MemberVO" id="memberMap">
+		<id property="memberid" column="memberid"/>
+		<result property="memberid" column="memberid"/>
+		<result property="memberpw" column="memberpw"/>
+		<result property="name" column="name"/>
+		<result property="gender" column="gender"/>
+		<result property="age" column="age"/>
+		<result property="registerDate" column="registerdate"/>
+		<result property="enabled" column="enabled"/>
+		<collection property="authList" resultMap="authMap"> </collection>
+	</resultMap>
+	
+	<resultMap type="org.zerock.domain.AuthVO" id="authMap">
+		<result property="memberid" column="memberid"/>
+		<result property="auth" column="auth"/>
+	</resultMap>
+	
+	<select id="read" resultMap="memberMap">
+		select mem.memberid, memberpw, name, gender, age, registerdate, enabled, auth.auth 
+		from tbl_member mem LEFT OUTER JOIN tbl_auth auth 
+		on mem.memberid=auth.memberid 
+		where mem.memberid=#{memberid}
+	</select>
+	
+	<insert id="join" parameterType="org.zerock.domain.MemberVO">
+		insert into tbl_member (memberid, memberpw, name, gender, age)
+		values (#{memberid}, #{memberpw}, #{name}, #{gender}, #{age})
+	</insert>
+	
+	<insert id="joinAuth" parameterType="org.zerock.domain.MemberVO">
+		insert into tbl_auth (memberid, auth)
+		values (#{memberid}, 'ROLE_USER')
+	</insert>
+	
+	<select id="checkid" resultType="String">
+		select memberid
+		from tbl_member
+		where memberid=#{memberid}
+	</select>
+	
+	<select id="searchid" resultType="String">
+		select memberid
+		from tbl_member
+		where name=#{name}
+	</select>
+	
+	<update id="profileEdit" parameterType="org.zerock.domain.MemberVO">
+		update tbl_member
+		set
+		name=#{name},
+		gender = #{gender},
+		age = #{age}
+		where memberid = #{memberid}
+	</update>
+	
+	<select id="allMember" resultType="org.zerock.domain.AdminVO">
+		select m.memberid, m.name, m.gender, m.age, count(distinct b.bno) as "boardCnt", count(distinct r.rno) as "replyCnt", m.registerDate
+		from tbl_member m 
+		left join tbl_board b on m.memberid = b.writer
+		left join tbl_reply r on b.bno=r.bno
+		group by m.memberid, m.name, m.gender, m.age, m.registerDate
+		order by m.registerDate desc
+	</select>
+	
+	<select id="countMember" resultType="int">
+		select count(*) as memberCnt
+		from tbl_member
+	</select>
+	
+	<select id="countBoard" resultType="int">
+		select count(*) as boardCnt
+		from tbl_board
+	</select>
+	
+	<select id="countReply" resultType="int">
+		select count(*) as replyCnt
+		from tbl_reply
+	</select>
+	
+	<select id="countGender" resultType="org.zerock.domain.GenderVO">
+		select gender, count(*) as count, round(RATIO_TO_REPORT(count(*)) OVER(), 2)*100 AS ratio
+		from tbl_member
+		group by gender
+	</select>
+	
+	<select id="countAge" resultType="org.zerock.domain.AgeVO">
+		select a.age, a.count, a.ratio
+		from
+		(select CASE WHEN age BETWEEN 1 AND 20 THEN '10대 이하'
+		WHEN age BETWEEN 20 AND 29 THEN '20대'
+        WHEN age BETWEEN 30 AND 39 THEN '30대'
+		WHEN age BETWEEN 40 AND 49 THEN '40대'
+		WHEN age BETWEEN 50 AND 59 THEN '50대'
+		WHEN age &gt;= 60 THEN '60대 이상'
+		WHEN age IS NULL THEN '미입력'
+            END AS age, count(*) as count, round(RATIO_TO_REPORT(count(*)) OVER(), 2)*100 AS ratio
+		from tbl_member
+		group by
+		CASE WHEN age BETWEEN 1 AND 20 THEN '10대 이하'
+     	WHEN age BETWEEN 20 AND 29 THEN '20대'
+     	WHEN age BETWEEN 30 AND 39 THEN '30대'
+     	WHEN age BETWEEN 40 AND 49 THEN '40대'
+     	WHEN age BETWEEN 50 AND 59 THEN '50대'
+     	WHEN age &gt;= 60 THEN '60대 이상'
+     	WHEN age IS NULL THEN '미입력'
+     		END
+		) a
+		order by age
+	</select>
+	
+	<select id="searchDuration" resultType="org.zerock.domain.DurationVO">
+		SELECT 
+    		NVL(TO_CHAR(date_table.day, 'YYYY-MM-DD'), '기간 합계') AS day,
+    		NVL(SUM(member.newjoin), 0) AS newjoin,
+    		NVL(SUM(board.board), 0) AS board,
+    		NVL(SUM(reply.reply), 0) AS reply
+		FROM (
+    		SELECT TO_DATE(#{startDate}, 'YYYY-MM-DD') + LEVEL - 1 AS day
+    		FROM DUAL
+    		CONNECT BY LEVEL &lt;= TO_DATE(#{endDate}, 'YYYY-MM-DD') - TO_DATE(#{startDate}, 'YYYY-MM-DD') + 1) date_table
+		LEFT JOIN (
+		    SELECT TRUNC(registerDate) AS regDate, COUNT(memberid) AS newjoin
+		    FROM tbl_member
+		    WHERE TRUNC(registerDate) BETWEEN TO_DATE(#{startDate}, 'YYYY-MM-DD') AND TO_DATE(#{endDate}, 'YYYY-MM-DD')
+		    GROUP BY TRUNC(registerDate)) member
+		ON member.regDate = date_table.day
+		LEFT JOIN (
+		    SELECT TRUNC(boardDate) AS boardDate, COUNT(bno) AS board
+		    FROM tbl_board
+			WHERE TRUNC(boardDate) BETWEEN TO_DATE(#{startDate}, 'YYYY-MM-DD') AND TO_DATE(#{endDate}, 'YYYY-MM-DD')
+		    GROUP BY TRUNC(boardDate)) board
+		ON board.boardDate = date_table.day
+		LEFT JOIN (
+		    SELECT TRUNC(replyDate) AS replyDate, COUNT(rno) AS reply
+		    FROM tbl_reply
+			WHERE TRUNC(replyDate) BETWEEN TO_DATE(#{startDate}, 'YYYY-MM-DD') AND TO_DATE(#{endDate}, 'YYYY-MM-DD')
+		    GROUP BY TRUNC(replyDate)) reply
+		ON reply.replyDate = date_table.day
+		group by grouping sets(TO_CHAR(date_table.day, 'YYYY-MM-DD'), '기간 합계')
+		ORDER BY day
+	</select>
+	
+	<select id="searchBoard" resultType="org.zerock.domain.SearchBoardVO">
+		select m.memberid, b.bno, b.title, b.boardDate
+        from tbl_member m
+        left join tbl_board b
+        on m.memberid=b.writer
+        where m.memberid = #{memberid}
+	</select>
+	
+	<select id="searchReply" resultType="org.zerock.domain.SearchReplyVO">
+		select m.memberid, b.bno, r.rno, r.reply, r.replyDate
+        from tbl_member m
+        left join tbl_reply r
+        on m.memberid = r.replyer
+        left join tbl_board b
+        on r.bno = b.bno
+        where m.memberid = #{memberid}
+	</select>
+	
+	<update id="passwordEdit" parameterType="String">
+		update tbl_member
+		set
+		memberpw=#{memberpw}
+		where memberid = #{memberid}
+	</update>
+	
+</mapper>

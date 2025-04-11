@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.zerock.mapper.BoardMapper">
+
+	<select id="getList" resultType="org.zerock.domain.BoardVO">
+	<![CDATA[select * from tbl_board where bno > 0]]>
+	</select>
+	
+	<!-- 
+	<select id="getListWithPaging" resultType="org.zerock.domain.BoardVO">
+	<![CDATA[select b.bno, r.replyCnt, b.title, b.content, b.writer, b.boardDate, b.hitCnt, b.boardLike
+	from (select ROW_NUMBER() OVER(order by bno desc) as rn, 
+    bno, title, content, writer, boardDate, hitCnt, boardLike 
+    from tbl_board) b
+	left join (select count(*) as replyCnt, bno from tbl_reply group by bno) r
+    on b.bno = r.bno
+	where rn > (#{pageNum}-1)*#{amount} AND rn <= #{pageNum}*#{amount}]]>
+	</select>
+	-->
+	
+	<select id="getListWithPaging" resultType="org.zerock.domain.BoardVO">
+    select bno, replyCnt, title, content, writer, boardDate, hitCnt, boardLike from 
+    (select ROW_NUMBER() OVER (order by b.bno desc) as rn, b.bno, r.replyCnt, b.title, b.content, b.writer, b.boardDate, b.hitCnt, b.boardLike from
+        (select * from tbl_board
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND (
+                    (title LIKE '%' || REPLACE(REPLACE(#{keyword}, '%', '!%'), '_', '!_') || '%' ESCAPE '!')
+                    OR (content LIKE '%' || REPLACE(REPLACE(#{keyword}, '%', '!%'), '_', '!_') || '%' ESCAPE '!')
+                    OR (writer LIKE '%' || REPLACE(REPLACE(#{keyword}, '%', '!%'), '_', '!_') || '%' ESCAPE '!')
+                )
+            </if>
+        </where>
+        ) b
+        left join (select count(*) as replyCnt, bno from tbl_reply group by bno) r
+    	on b.bno = r.bno
+    )
+    <![CDATA[where rn > (#{pageNum}-1)*#{amount} AND rn <= #{pageNum}*#{amount}]]>
+	</select>
+
+	
+	
+	<select id="getTotal" resultType="int">
+    select count(*) from
+    (select * from tbl_board
+    <where>
+            <if test="keyword != null and keyword != ''">
+                AND (
+                    (title LIKE '%' || REPLACE(REPLACE(#{keyword}, '%', '!%'), '_', '!_') || '%' ESCAPE '!')
+                    OR (content LIKE '%' || REPLACE(REPLACE(#{keyword}, '%', '!%'), '_', '!_') || '%' ESCAPE '!')
+                    OR (writer LIKE '%' || REPLACE(REPLACE(#{keyword}, '%', '!%'), '_', '!_') || '%' ESCAPE '!')
+                )
+            </if>
+        </where>
+        )
+	</select>
+	
+	<select id="getReplyTotal" resultType="int">
+		select count(*) from tbl_reply where bno=#{bno}
+	</select>
+	
+	<insert id="insert">
+		insert into tbl_board (bno, title, content, writer)
+		values (seq_board.nextval, #{title}, #{content}, #{writer})
+	</insert>
+	
+	<insert id="insertSelectKey">
+		<selectKey keyProperty="bno" order="BEFORE" resultType="long">
+			select seq_board.nextval from dual
+		</selectKey>
+		insert into tbl_board (bno, title, content, writer)
+		values (#{bno}, #{title}, #{content}, #{writer})
+	</insert>
+	
+	<select id="read" resultType="org.zerock.domain.BoardVO">
+		select b.bno, r.replyCnt, b.title, b.writer, b.content, b.hitCnt, b.boardDate, b.boardLike
+		from tbl_board b
+		left join 
+		(select count(*) as replyCnt, bno from tbl_reply group by bno) r
+		on b.bno=r.bno
+		where b.bno=#{bno}
+	</select>
+	<!-- select * from tbl_board where bno = #{bno} -->
+	
+	<update id="update">
+		update tbl_board set
+		title = #{title},
+		content = #{content}
+		where bno = #{bno}
+	</update>
+	
+	<delete id="delete">
+		delete from tbl_board where bno = #{bno}
+	</delete>
+	
+</mapper>
